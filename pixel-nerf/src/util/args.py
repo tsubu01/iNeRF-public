@@ -98,9 +98,13 @@ def parse_args(
     PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     EXPCONF_PATH = os.path.join(PROJECT_ROOT, "expconf.conf")
     expconf = ConfigFactory.parse_file(EXPCONF_PATH)
+    
+    print('args.conf is: {}'.format(args.conf))
 
     if args.conf is None:
         args.conf = expconf.get_string("config." + args.name, default_conf)
+    
+    print('args.conf is: {}'.format(args.conf))
 
     if args.conf is None:
         args.conf = expconf.get_string("config." + args.name, default_conf)
