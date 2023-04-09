@@ -114,9 +114,9 @@ def parse_args(
     #uri_conf = 'conf/default.conf'
     uri_conf = 'conf/blabla'
 
-    print('uri changed conf')
-    conf = ConfigFactory.parse_file(uri_conf)#uri added
-    #conf = ConfigFactory.parse_file(args.conf)#uri commented out
+    #print('uri changed conf')
+    #conf = ConfigFactory.parse_file(uri_conf)#uri added
+    conf = ConfigFactory.parse_file(args.conf)#uri commented out
 
     if args.dataset_format is None:
         args.dataset_format = conf.get_string("data.format", default_data_format)
