@@ -111,7 +111,8 @@ def parse_args(
     if args.datadir is None:
         args.datadir = expconf.get_string("datadir." + args.name, default_datadir)
     print('args.conf is: {}'.format(args.conf))
-    conf = ConfigFactory.parse_file(args.conf)
+    conf = ConfigFactory.parse_file('conf/default.conf')#uri added
+    #conf = ConfigFactory.parse_file(args.conf)#uri commented out
 
     if args.dataset_format is None:
         args.dataset_format = conf.get_string("data.format", default_data_format)
