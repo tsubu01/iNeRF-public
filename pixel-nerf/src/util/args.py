@@ -19,6 +19,7 @@ def parse_args(
     default_ray_batch_size=50000,
     jupyter=False
 ):
+    print('inside parse_args')
     parser = argparse.ArgumentParser()
     parser.add_argument("--conf", "-c", type=str, default=None)
     parser.add_argument("--resume", "-r", action="store_true", help="continue training")
