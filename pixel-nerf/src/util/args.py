@@ -80,8 +80,10 @@ def parse_args(
     if callback is not None:
         parser = callback(parser)
     if not jupyter:
+        print('in src/util/args.py, case not jupyter')
         args = parser.parse_args()
     else:
+        print('in src/util/args.py, case is jupyter')
         args = parser.parse_args("")
 
     if args.exp_group_name is not None:
