@@ -18,6 +18,9 @@ import mediapy as media
 import matplotlib.pyplot as plt
 from PIL import Image
 
+import time#debug uri
+import pickle#debug uri
+
 config = {
     'input': './input/1.png',
     'target': './input/2.png',
@@ -52,13 +55,14 @@ def extra_args(parser):
         default=os.path.join(ROOT_DIR, "pose_estimation"),
         help="Output directory",
     )
-    parser.add_argument("--size", type=int, default=128, help="Input image maxdim")
+    parser.add_argument("--size", type=int, default=32, help="Input image maxdim")
     parser.add_argument(
         "--out_size",
         type=str,
-        default="128",
+        default="32",
         help="Output image size, either 1 or 2 number (w h)",
     )
+    #debug uri: default size was 128
 
     parser.add_argument("--focal", type=float, default=131.25, help="Focal length")
     parser.add_argument("--radius", type=float, default=1.3, help="Camera distance")
@@ -142,13 +146,13 @@ print(f"{cam_pose[0]}")
 
 # Create optimizer.
 optimizer = torch.optim.Adam(params=[cam_pose], lr=args.lrate)
-n_steps = 100 + 1
+n_steps = 30 + 1#debug: uri changed from 100 + 1
 
 # Loss.
 mse_loss = torch.nn.MSELoss()
 
 # Sampling.
-n_rays = 1024
+n_rays = 64#debug: uri changed from 1024
 sampling = 'center'
 
 # Pose optimization.
@@ -157,6 +161,7 @@ fine_patches = []
 gt_patches = []
 
 for i_step in range(n_steps):
+    print('now perturbing position, step: {}'.format(i_step))#debug uri
     # Encode.
     net.encode(
         input_image.unsqueeze(0), input_pose.unsqueeze(0).to(device=device), focal,
@@ -190,19 +195,40 @@ for i_step in range(n_steps):
         mask = mask.reshape(H*W)
 
         idxs_sampled = torch.where(mask>0)[0]
-
+    print('rendering rays...')#debug uri
+    t0 = time.time()
     render_rays_sampled = render_rays_flatten[idxs_sampled].to(device=device)
-
+    print('done rendering rays...')#debug uri
+    print('time: {0:.2f}'.format(time.time()-t0))
+    print('rendering par...')#debug uri
+    
+    t0 = time.time()
     rgb, _ = render_par(render_rays_sampled[None])
-    loss = mse_loss(rgb, target_image_flatten[idxs_sampled][None])
+    print('done rendering par...')#debug uri
+    print('time: {0:.2f}'.format(time.time()-t0))
 
+    print('calculating loss...')#debug uri
+    t0 = time.time()
+    loss = mse_loss(rgb, target_image_flatten[idxs_sampled][None])
+    print('done calculating loss...')#debug uri
+    print('time: {0:.2f}'.format(time.time()-t0))
+
+    print('calculating zero grad and backprop...')#debug uri
+    t0 = time.time()
     optimizer.zero_grad()
     loss.backward()
+    print('done backprop...')#debug uri
+    print('time: {0:.2f}'.format(time.time()-t0))
+    print('uri current cam pose:') 
+    print('{}'.format(np.around(cam_pose[0].detach().numpy(), 2)))
 
-    if i_step % 10 == 0:        
+    
+    
+    if i_step % 10 == 0:
+        print('shape of rgb: {}'.format(rgb.shape))#debug
         predicted_poses.append(torch.clone(cam_pose[0]).detach().numpy())
-        fine_patches.append(torch.clone(rgb[0]).detach().cpu().numpy().reshape(32, 32, 3))
-        gt_patches.append(torch.clone(target_image_flatten[idxs_sampled]).detach().cpu().numpy().reshape(32, 32, 3))
+        fine_patches.append(torch.clone(rgb[0]).detach().cpu().numpy().reshape(8, 8, 3))#debug uri was 32x32x3
+        gt_patches.append(torch.clone(target_image_flatten[idxs_sampled]).detach().cpu().numpy().reshape(8, 8, 3))#debug uri was 32x32x3
 
 #         pose_pred = predicted_poses[-1].copy()
 #         pose_pred[2, -1] -= args.radius
@@ -211,6 +237,10 @@ for i_step in range(n_steps):
         print(f"Step {i_step}, loss: {loss}")
         
     optimizer.step()
+
+with open("uri_predicted_poses", "wb") as fp:   #Pickling
+    pickle.dump(predicted_poses, fp)
+print('saved predicted poses to uri_predicted_poses for future hi-res rendering')    
     
 def create_image(patch):
     image = np.zeros((128, 128, 3))
@@ -225,6 +255,8 @@ render_poses = torch.from_numpy(np.array(predicted_poses))
 render_rays = util.gen_rays(render_poses, W, H, focal, z_near, z_far).to(device=device)
 with torch.no_grad():
     print("Rendering", n_poses * H * W, "rays")
+    t0 = time.time()
+    
     all_rgb_fine = []
     for rays in tqdm.tqdm(torch.split(render_rays.view(-1, 8), 80000, dim=0)):
         rgb, _depth = render_par(rays[None])
@@ -241,7 +273,8 @@ with torch.no_grad():
 
     frames_dir_name = os.path.join(config['output'], im_name + "_frames")
     os.makedirs(frames_dir_name, exist_ok=True)
-
+    print('done rendering output...')#debug uri
+    print('time: {0:.2f}'.format(time.time()-t0))
     for i in range(n_poses):
         if sampling == 'patch':
             pred_patch_path = os.path.join(config['output'], f'./pred_patch_{i}.png')
@@ -258,6 +291,12 @@ data = {}
 for i, f in enumerate(overlay_frames):
     step = i*10
     data[f"Step {step}"] = f
+
+    
+with open("uri_output_frames", "wb") as fp:   #Pickling
+    pickle.dump(data, fp)
+print('saved output frames to uri_output_frames')
+
 media.show_images(data)
 
 

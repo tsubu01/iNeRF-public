@@ -7,8 +7,7 @@ dependencies:
   - python>=3.8
   - pip
   - pip:
-      - pyhocon==0.3.6
-      - pyparsing==2.3.1
+      - pyhocon
       - opencv-python
       - dotmap
       - tensorboard
@@ -20,7 +19,7 @@ dependencies:
   - scipy
   - numpy
   - matplotlib
-  - pytorch==1.8.0
-  - torchvision==0.9.0
+  - pytorch==1.6.0
+  - torchvision==0.7.0
   - scikit-image==0.17.2
   - tqdm

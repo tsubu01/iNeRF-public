@@ -111,10 +111,11 @@ def parse_args(
     if args.datadir is None:
         args.datadir = expconf.get_string("datadir." + args.name, default_datadir)
     print('args.conf is: {}'.format(args.conf))
-    args.conf = 'conf/exp/srn_uri.conf'
+    #args.conf = 'conf/exp/srn_uri.conf'
     print('args.conf is: {}'.format(args.conf))
 
     #print('uri changed conf')
+    #conf = ConfigFactory.parse_file('conf/default.conf')#uri changed according to issue #3
     conf = ConfigFactory.parse_file(args.conf)
 
     if args.dataset_format is None:
