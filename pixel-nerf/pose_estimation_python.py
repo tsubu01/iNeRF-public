@@ -20,10 +20,16 @@ from PIL import Image
 
 import time#debug uri
 import pickle#debug uri
+from torchviz import make_dot#visualization uri
+
 
 config = {
     'input': './input/1.png',
-    'target': './input/2.png',
+    #'target': './input/2.png',
+    #'target': './input/2_grey_background.png',#uri changed, experiment 2
+    #'target': './input/2_on_real_road_128_1.png',#uri changed, experiment 2
+    'target': './input/2_on_real_road_128_2.png',#uri changed, experiment 2
+
     'output': './pose_estimation'
 }
 
@@ -55,11 +61,11 @@ def extra_args(parser):
         default=os.path.join(ROOT_DIR, "pose_estimation"),
         help="Output directory",
     )
-    parser.add_argument("--size", type=int, default=32, help="Input image maxdim")
+    parser.add_argument("--size", type=int, default=128, help="Input image maxdim")
     parser.add_argument(
         "--out_size",
         type=str,
-        default="32",
+        default="128",
         help="Output image size, either 1 or 2 number (w h)",
     )
     #debug uri: default size was 128
@@ -146,19 +152,20 @@ print(f"{cam_pose[0]}")
 
 # Create optimizer.
 optimizer = torch.optim.Adam(params=[cam_pose], lr=args.lrate)
-n_steps = 30 + 1#debug: uri changed from 100 + 1
+n_steps = 1 + 1#debug: uri changed from 100 + 1
 
 # Loss.
 mse_loss = torch.nn.MSELoss()
 
 # Sampling.
-n_rays = 64#debug: uri changed from 1024
+n_rays = 1024#64#debug: uri changed from 1024
 sampling = 'center'
 
 # Pose optimization.
 predicted_poses = []
 fine_patches = []
 gt_patches = []
+
 
 for i_step in range(n_steps):
     print('now perturbing position, step: {}'.format(i_step))#debug uri
@@ -206,7 +213,14 @@ for i_step in range(n_steps):
     rgb, _ = render_par(render_rays_sampled[None])
     print('done rendering par...')#debug uri
     print('time: {0:.2f}'.format(time.time()-t0))
-
+    if i_step == 0:#in first iteration we save a model visualization:
+        #make_dot(rgb, params=dict(list(net.named_parameters()))).render("pixelnerf_model", format="png")
+        input_names = ['rays']
+        output_names = ['output']
+        print(render_rays_sampled[None])
+        print(render_rays_sampled[None].shape)
+        #torch.onnx.export(net, render_rays_sampled[None], 'pixelnerf.onnx', input_names=input_names, output_names=output_names)
+        
     print('calculating loss...')#debug uri
     t0 = time.time()
     loss = mse_loss(rgb, target_image_flatten[idxs_sampled][None])
@@ -227,8 +241,8 @@ for i_step in range(n_steps):
     if i_step % 10 == 0:
         print('shape of rgb: {}'.format(rgb.shape))#debug
         predicted_poses.append(torch.clone(cam_pose[0]).detach().numpy())
-        fine_patches.append(torch.clone(rgb[0]).detach().cpu().numpy().reshape(8, 8, 3))#debug uri was 32x32x3
-        gt_patches.append(torch.clone(target_image_flatten[idxs_sampled]).detach().cpu().numpy().reshape(8, 8, 3))#debug uri was 32x32x3
+        fine_patches.append(torch.clone(rgb[0]).detach().cpu().numpy().reshape(32, 32, 3))#debug uri was 32x32x3
+        gt_patches.append(torch.clone(target_image_flatten[idxs_sampled]).detach().cpu().numpy().reshape(32, 32, 3))#debug uri was 32x32x3
 
 #         pose_pred = predicted_poses[-1].copy()
 #         pose_pred[2, -1] -= args.radius
