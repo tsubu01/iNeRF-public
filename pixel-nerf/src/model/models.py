@@ -153,6 +153,8 @@ class PixelNeRFNet(torch.nn.Module):
         NS is number of input views
         :return (SB, B, 4) r g b sigma
         """
+        #print('in net forward')
+        #print(xyz.shape)#uri debug
         with profiler.record_function("model_inference"):
             SB, B, _ = xyz.shape
             NS = self.num_views_per_obj

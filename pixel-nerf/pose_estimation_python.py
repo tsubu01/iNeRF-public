@@ -20,15 +20,23 @@ from PIL import Image
 
 import time#debug uri
 import pickle#debug uri
-from torchviz import make_dot#visualization uri
+#from torchviz import make_dot#visualization uri
 
 
 config = {
     'input': './input/1.png',
+    #'input': './input/2.png',
+    #'input': './input/1_rotated.png',
+    #'input': './input/police_normalize.png',
     #'target': './input/2.png',
     #'target': './input/2_grey_background.png',#uri changed, experiment 2
     #'target': './input/2_on_real_road_128_1.png',#uri changed, experiment 2
     'target': './input/2_on_real_road_128_2.png',#uri changed, experiment 2
+    #'target': './input/2_on_real_road_128_1_centered.png',#uri changed, experiment 2
+    #'target': './input/2_on_real_road_128_1_down.png',#uri changed, experiment 2
+    #'target': './input/2_on_real_road_128_3_centered.png',#uri changed, experiment 2
+    #'target': './input/2_displaced_left.png',
+    #'target': './input/2_small_displacement_right.png',
 
     'output': './pose_estimation'
 }
@@ -135,6 +143,9 @@ input_image = T.Resize(in_sz)(input_image)
 input_image = image_to_tensor(input_image).to(device=device)
 input_pose = torch.eye(4)
 input_pose[2, -1] = args.radius
+#input_pose[1, 1] = 1.5#uri testing
+#input_pose[0, -1] = 1.5#uri testing
+
 
 print(f"Target image: {config['target']}")
 target_image = Image.fromarray(target_image_np)
@@ -152,7 +163,7 @@ print(f"{cam_pose[0]}")
 
 # Create optimizer.
 optimizer = torch.optim.Adam(params=[cam_pose], lr=args.lrate)
-n_steps = 1 + 1#debug: uri changed from 100 + 1
+n_steps = 150 + 1#debug: uri changed from 100 + 1
 
 # Loss.
 mse_loss = torch.nn.MSELoss()
@@ -160,13 +171,14 @@ mse_loss = torch.nn.MSELoss()
 # Sampling.
 n_rays = 1024#64#debug: uri changed from 1024
 sampling = 'center'
-
+centermost_mask_sampling = True#uri debug
+depth_aware_loss = True#uri - testing loss calc only where object is rendered.
 # Pose optimization.
 predicted_poses = []
 fine_patches = []
 gt_patches = []
 
-
+print('sampling method is: {}'.format(sampling))
 for i_step in range(n_steps):
     print('now perturbing position, step: {}'.format(i_step))#debug uri
     # Encode.
@@ -179,8 +191,9 @@ for i_step in range(n_steps):
     assert render_rays_flatten.shape[0] == H*W
     if sampling == 'random':
         idxs_sampled = torch.randint(0, H*W, (n_rays,))
+    
     elif sampling == 'center':
-        frac = 0.5
+        frac = 0.25#to be exactly 1024 size.... 1.0# was 0.5 uri debug 
         mask = torch.zeros((H, W))
         h_low = int(0.5*(1-frac)*H)
         h_high = int(0.5*(1+frac)*H)
@@ -190,7 +203,15 @@ for i_step in range(n_steps):
         mask = mask.reshape(H*W)
 
         idxs_masked = torch.where(mask>0)[0]
-        idxs_sampled = idxs_masked[torch.randint(0, idxs_masked.shape[0], (n_rays,))]
+        print('shape of idxs_masked: {}'.format(idxs_masked.shape))
+        if centermost_mask_sampling:#uri debug
+            center_index_of_idx_masked = int(len(idxs_masked)/2)
+            low_index_to_sample = center_index_of_idx_masked - int(n_rays/2)
+            idxs_sampled = idxs_masked[low_index_to_sample: low_index_to_sample + n_rays]
+        else:
+            idxs_sampled = idxs_masked[torch.randint(0, idxs_masked.shape[0], (n_rays,))]
+        print(idxs_sampled)
+
     elif sampling == 'patch':
         frac = 0.25
         mask = torch.zeros((H, W))
@@ -210,20 +231,49 @@ for i_step in range(n_steps):
     print('rendering par...')#debug uri
     
     t0 = time.time()
-    rgb, _ = render_par(render_rays_sampled[None])
+    #rgb, _ = render_par(render_rays_sampled[None])#orig line uri
+    rgb, depth = render_par(render_rays_sampled[None])#uri new line for depth output
+    
+    #selecting the indices where the ray depth is above a threshold:
+    depth_threshold=0.5
+    
+    where_object = torch.where(depth[0,:]>depth_threshold)[0]
+    print('depth: {}'.format(depth.shape))
+    print('rgb: {}'.format(rgb.shape))
+    #print('where object: {}'.format(where_object))
+    #print('size: {}'.format(where_object.shape))
+    
     print('done rendering par...')#debug uri
+    #print('type of depth: {}'.format(type(depth)))
+    #print('shape of depth: {}'.format(depth.shape))
+    #print('***** depth: ****** {}'.format(depth.reshape(32, 32)))
+    #saving depth predictions uri:
+    if i_step == 0:
+        depth_preds_uri = []
+    depth_preds_uri.append(depth.detach().cpu().numpy().reshape(32, 32))
     print('time: {0:.2f}'.format(time.time()-t0))
-    if i_step == 0:#in first iteration we save a model visualization:
+    
+    
+    """if i_step == 0:#in first iteration we save a model visualization:
         #make_dot(rgb, params=dict(list(net.named_parameters()))).render("pixelnerf_model", format="png")
         input_names = ['rays']
         output_names = ['output']
         print(render_rays_sampled[None])
         print(render_rays_sampled[None].shape)
+        dummy_input = torch.tensor([[[1,2,3]]], dtype=torch.float).to(device=device)
+        print('shape of dummy input: {}'.format(dummy_input.shape))
+        torch.onnx.export(net, dummy_input, 'pixelnerf.onnx', input_names=input_names, output_names=output_names)
         #torch.onnx.export(net, render_rays_sampled[None], 'pixelnerf.onnx', input_names=input_names, output_names=output_names)
-        
+    """    
     print('calculating loss...')#debug uri
     t0 = time.time()
-    loss = mse_loss(rgb, target_image_flatten[idxs_sampled][None])
+    if depth_aware_loss:
+        print('depth aware loss***')
+        print('size of array in loss calculation: orig: {}, depth aware: {}'.format(rgb.shape, rgb[:1, where_object, :].shape))
+        loss = mse_loss(rgb[:1, where_object, :], target_image_flatten[idxs_sampled][None][:1, where_object])
+    else:
+        loss = mse_loss(rgb, target_image_flatten[idxs_sampled][None])
+    
     print('done calculating loss...')#debug uri
     print('time: {0:.2f}'.format(time.time()-t0))
 
@@ -237,8 +287,8 @@ for i_step in range(n_steps):
     print('{}'.format(np.around(cam_pose[0].detach().numpy(), 2)))
 
     
-    
-    if i_step % 10 == 0:
+    disp_step = 5
+    if i_step % disp_step == 0:#was 10, uri debug
         print('shape of rgb: {}'.format(rgb.shape))#debug
         predicted_poses.append(torch.clone(cam_pose[0]).detach().numpy())
         fine_patches.append(torch.clone(rgb[0]).detach().cpu().numpy().reshape(32, 32, 3))#debug uri was 32x32x3
@@ -254,7 +304,7 @@ for i_step in range(n_steps):
 
 with open("uri_predicted_poses", "wb") as fp:   #Pickling
     pickle.dump(predicted_poses, fp)
-print('saved predicted poses to uri_predicted_poses for future hi-res rendering')    
+print('saved predicted poses to uri_predicted_poses for future hi-res rendering')
     
 def create_image(patch):
     image = np.zeros((128, 128, 3))
@@ -303,13 +353,24 @@ with torch.no_grad():
         
 data = {}
 for i, f in enumerate(overlay_frames):
-    step = i*10
+    step = i*disp_step
     data[f"Step {step}"] = f
 
     
 with open("uri_output_frames", "wb") as fp:   #Pickling
     pickle.dump(data, fp)
 print('saved output frames to uri_output_frames')
+
+depths_uri = {}
+for i, f in enumerate(depth_preds_uri):
+    step = i
+    data[f"Step {step}"] = f
+    
+    
+with open("uri_depth", "wb") as fp:   #Pickling
+        pickle.dump(data, fp)
+        print('saved ray depths to uri_depth')
+
 
 media.show_images(data)
 
